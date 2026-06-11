@@ -3,96 +3,155 @@ import hashlib
 import json
 import os
 
-URL = (
-    "https://apicatalog.mziq.com/filemanager/company/"
-    "4b56353d-d5d9-435f-bf63-dcbf0a6c25d5/"
-    "filter/categories/year/meta"
-)
 
+class MRVMonitor:
 
-CATEGORIAS = [
-    "Earnings Release",
-    "Prévia Operacional",
-    "ITR/DFP",
-    "Transcrição"
-]
-
-
-
-    # internal_name: 'central_de_resultados_release',
-    #internal_name: 'central_de_resultados_previa',
-    #internal_name: 'central_de_resultados_itr',
-    #internal_name: 'central_de_resultados_planilha_interativa',
-    #internal_name: 'central_de_resultados_audio',
-    #internal_name: 'central_de_resultados_transcricao',
-PAYLOAD = {
-    "year": 2025,
-    "categories": [
-        "central_de_resultados_release"
-    ],
-    "language": "pt_BR",
-    "published": True
-}
-
-ARQUIVO_HASHES = "documentos_processados.json"
-PASTA_PDFS = "pdfs"
-
-
-def carregar_hashes():
-    try:
-        with open(ARQUIVO_HASHES, "r") as f:
-            return set(json.load(f))
-    except (FileNotFoundError, json.JSONDecodeError):
-        return set()
-
-
-def salvar_hashes(hashes):
-    with open(ARQUIVO_HASHES, "w") as f:
-        json.dump(list(hashes), f, indent=2)
-
-
-os.makedirs(PASTA_PDFS, exist_ok=True)
-
-response = requests.post(URL, json=PAYLOAD)
-response.raise_for_status()
-
-dados = response.json()
-
-documentos = dados["data"]["document_metas"]
-
-hashes_processados = carregar_hashes()
-
-for doc in documentos:
-
-    pdf_url = doc["file_url"]
-
-    print(f"Verificando: {doc['file_title']}")
-
-    pdf_response = requests.get(pdf_url)
-    pdf_response.raise_for_status()
-
-    hash_doc = hashlib.sha256(pdf_response.content).hexdigest()
-
-    if hash_doc in hashes_processados:
-        print(f"Já processado: {doc['file_title']}")
-        continue
-
-    print(f"Novo documento encontrado: {doc['file_title']}")
-
-    nome_arquivo = (
-        f"{doc['file_year']}_T{doc['file_quarter']}_{hash_doc[:8]}.pdf"
+    URL = (
+        "https://apicatalog.mziq.com/filemanager/company/"
+        "4b56353d-d5d9-435f-bf63-dcbf0a6c25d5/"
+        "filter/categories/year/meta"
     )
 
-    caminho_arquivo = os.path.join(PASTA_PDFS, nome_arquivo)
+    ARQUIVO_HASHES = "documentos_processados.json"
+    PASTA_PDFS = "pdfs"
+    CATEGORIAS = [
+        "central_de_resultados_release",
+        "central_de_resultados_previa",
+        "central_de_resultados_itr",
+        "central_de_resultados_planilha_interativa",
+        "central_de_resultados_transcricao"
+    ]
+    def __init__(self, ano:int = 2026, categoria: str ="central_de_resultados_previa"):
+        self.ano = ano
+        if categoria not in self.CATEGORIAS:
+            raise ValueError(
+                f"Categoria inválida: {categoria}\n"
+                f"Categorias disponíveis: {self.CATEGORIAS}"
+            )
+        if ano < 2015 :
+            raise ValueError(
+                f"Ano inválida"
+            ) 
 
-    with open(caminho_arquivo, "wb") as f:
-        f.write(pdf_response.content)
+        self.payload = {
+            "year": ano,
+            "categories": [
+                categoria
+            ],
+            "language": "pt_BR",
+            "published": True
+        }
 
-    print(f"PDF salvo em: {caminho_arquivo}")
-    print(f"Hash: {hash_doc}")
+        os.makedirs(self.PASTA_PDFS, exist_ok=True)
 
-    hashes_processados.add(hash_doc)
+    def carregar_hashes(self):
+        try:
+            with open(self.ARQUIVO_HASHES, "r") as f:
+                return set(json.load(f))
+        except (FileNotFoundError, json.JSONDecodeError):
+            return set()
 
-salvar_hashes(hashes_processados)
+    def salvar_hashes(self, hashes):
+        with open(self.ARQUIVO_HASHES, "w") as f:
+            json.dump(list(hashes), f, indent=2)
 
-print("Monitoramento concluído.")
+    def buscar_documentos(self):
+        response = requests.post(
+            self.URL,
+            json=self.payload
+        )
+
+        response.raise_for_status()
+
+        dados = response.json()
+
+        return dados["data"]["document_metas"]
+
+    def baixar_documento(self, doc):
+
+        pdf_url = doc["file_url"]
+
+        pdf_response = requests.get(pdf_url)
+        pdf_response.raise_for_status()
+
+        return pdf_response.content
+
+    def gerar_hash(self, conteudo_pdf):
+        return hashlib.sha256(conteudo_pdf).hexdigest()
+
+    def salvar_pdf(self, doc, conteudo_pdf, hash_doc):
+
+        nome_arquivo = (
+            f"{doc['file_year']}_"
+            f"T{doc['file_quarter']}_"
+            f"{hash_doc[:8]}.pdf"
+        )
+
+        caminho = os.path.join(
+            self.PASTA_PDFS,
+            nome_arquivo
+        )
+
+        with open(caminho, "wb") as f:
+            f.write(conteudo_pdf)
+
+        return caminho
+
+    def executar(self):
+
+        hashes_processados = self.carregar_hashes()
+
+        documentos = self.buscar_documentos()
+
+        print(f"Encontrados {len(documentos)} documentos")
+
+        for doc in documentos:
+
+            print(
+                f"Verificando: "
+                f"{doc['file_title']}"
+            )
+
+            conteudo_pdf = self.baixar_documento(doc)
+
+            hash_doc = self.gerar_hash(
+                conteudo_pdf
+            )
+
+            if hash_doc in hashes_processados:
+                print(
+                    f"Já processado: "
+                    f"{doc['file_title']}"
+                )
+                continue
+
+            print(
+                f"Novo documento encontrado: "
+                f"{doc['file_title']}"
+            )
+
+            caminho = self.salvar_pdf(
+                doc,
+                conteudo_pdf,
+                hash_doc
+            )
+
+            print(f"PDF salvo em: {caminho}")
+
+            hashes_processados.add(hash_doc)
+
+        self.salvar_hashes(
+            hashes_processados
+        )
+
+        print("Monitoramento concluído.")
+
+
+if __name__ == "__main__":
+
+    monitor = MRVMonitor(
+        ano=2024,
+        categoria="central_de_resultados_release"
+    )
+
+    monitor.executar()
