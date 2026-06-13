@@ -1,27 +1,19 @@
-import fitz
+from PyPDF2 import PdfReader
 
-class PDFExtractor():
-    def __init__(self , pdf_path:str ): ## ainda vou arrumar para pegar um arquivo pdf ao contrario de um diretorio
+class PDFExtractor:
 
-        self.pdf_path= pdf_path
-        self.text  = ""
-    
+    def __init__(self, pdf_path: str):
+        self.pdf_path = pdf_path
 
-    def extract(self )-> str:
+    def extract(self):
 
-        pdf = fitz.open(self.pdf_path )
+        pdf = PdfReader(self.pdf_path)
 
-      
+        paginas = []
 
-        for pagina in pdf:
-            self.texto += pagina.get_text()
-        
-        pdf.close()
-        return  self.texto,
-    def total_caracteres(self)->int:
-        return len(self.texto)
+        for pagina in pdf.pages:
+            paginas.append(
+                pagina.extract_text()
+            )
 
-if __name__ == "__main__":
-    pass
-    
-        
+        return paginas
