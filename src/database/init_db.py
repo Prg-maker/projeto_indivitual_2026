@@ -1,0 +1,6 @@
+from connection import engine
+from models import Base
+
+Base.metadata.create_all(bind=engine)
+
+print("Tabela criada com sucesso!")

@@ -150,7 +150,7 @@ class MRVMonitor:
 if __name__ == "__main__":
 
     monitor = MRVMonitor(
-        ano=2025,
+        ano=2026,
         categoria="central_de_resultados_previa"
     )
 

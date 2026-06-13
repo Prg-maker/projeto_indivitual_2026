@@ -1,0 +1,33 @@
+services:
+
+  api:
+    build: .
+    container_name: conjuntura_api
+
+    env_file:
+      - .env
+
+    ports:
+      - "8000:8000"
+
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:17
+
+    container_name: conjuntura_postgres
+
+    environment:
+      POSTGRES_DB: conjuntura
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
